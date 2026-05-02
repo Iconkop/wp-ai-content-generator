@@ -1,0 +1,48 @@
+name: Build & Full Repo Zip Release
+
+# 推送 v* 标签时触发发布
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      # 拉取完整代码（包含所有文件）
+      - name: Checkout full repo code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # 配置 Node.js
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      # 安装依赖 + 构建
+      - name: Install and Build
+        run: |
+          npm install
+          npm run build
+
+      # 打包整个仓库为 zip（排除 .git 文件夹）
+      - name: Zip entire project
+        run: |
+          sudo apt update && sudo apt install -y zip
+          zip -r wp-ai-content-generator-full.zip . -x ".git/*" ".github/workflows/*"
+
+      # 发布到 Release 并上传压缩包
+      - name: Publish to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: wp-ai-content-generator-full.zip
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
