@@ -1,48 +1,66 @@
-name: Build & Full Repo Zip Release
+# 工作流名称：构建项目并打包完整仓库发布压缩包
+name: 构建项目并打包完整仓库发布Release
 
-# 推送 v* 标签时触发发布
+# 触发条件：推送以 v 开头的标签时自动执行
 on:
   push:
     tags:
       - 'v*'
 
+# 授权权限：允许读写仓库内容
 permissions:
   contents: write
 
 jobs:
+  # 任务名：构建并发布版本
   build-and-release:
+    # 运行环境：最新版 Ubuntu 系统
     runs-on: ubuntu-latest
     steps:
-      # 拉取完整代码（包含所有文件）
-      - name: Checkout full repo code
+      # 拉取仓库完整代码（拉取全部历史与文件）
+      - name: 拉取仓库完整代码
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      # 配置 Node.js
-      - name: Setup Node.js
+      # 配置 Node.js 20 环境
+      - name: 配置 Node.js 环境
         uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
 
-      # 安装依赖 + 构建
-      - name: Install and Build
+      # 安装依赖并执行项目构建
+      - name: 安装依赖并构建项目
         run: |
           npm install
           npm run build
 
-      # 打包整个仓库为 zip（排除 .git 文件夹）
-      - name: Zip entire project
-        run: |
-          sudo apt update && sudo apt install -y zip
-          zip -r wp-ai-content-generator-full.zip . -x ".git/*" ".github/workflows/*"
+      # 安装 zip 打包工具
+      - name: 安装 zip 压缩工具
+        run: sudo apt install -y zip
 
-      # 发布到 Release 并上传压缩包
-      - name: Publish to GitHub Release
+      # 打包项目：压缩包内一级目录为 wp-ai-content-generator，文件名带版本号
+      - name: 打包项目为带版本号压缩包
+        shell: bash
+        run: |
+          # 获取当前推送的版本标签 v1.0.0
+          TAG=${GITHUB_REF#refs/tags/}
+          ZIP_NAME="wp-ai-content-generator-${TAG}.zip"
+          # 创建临时目录，把所有文件拷贝进去，控制压缩包根目录
+          mkdir -p wp-ai-content-generator
+          cp -r ./* .env* wp-ai-content-generator/
+          # 打包并排除无用目录
+          zip -r "${ZIP_NAME}" wp-ai-content-generator \
+            -x "wp-ai-content-generator/.git/*" \
+            -x "wp-ai-content-generator/.github/*" \
+            -x "wp-ai-content-generator/node_modules/*"
+
+      # 发布到 GitHub Release 并自动生成更新日志
+      - name: 发布到 GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: wp-ai-content-generator-full.zip
+          files: wp-ai-content-generator-*.zip
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
