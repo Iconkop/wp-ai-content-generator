@@ -1,63 +1,68 @@
-# 工作流名称：构建项目并打包完整仓库发布压缩包
-name: 构建项目并打包完整仓库发布Release
+name: Build & Full Repo Zip Release
 
-# 触发条件：推送以 v 开头的标签时自动执行
 on:
   push:
     tags:
       - 'v*'
 
-# 授权权限：允许读写仓库内容
 permissions:
   contents: write
 
 jobs:
-  # 任务名：构建并发布版本
   build-and-release:
-    # 运行环境：最新版 Ubuntu 系统
     runs-on: ubuntu-latest
     steps:
-      # 拉取仓库完整代码（拉取全部历史与文件）
-      - name: 拉取仓库完整代码
+      - name: Checkout full repo code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      # 配置 Node.js 20 环境
-      - name: 配置 Node.js 环境
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
 
-      # 安装依赖并执行项目构建
-      - name: 安装依赖并构建项目
+      # 标准官方 npm 缓存，不换源、不瞎改配置
+      - name: Cache npm deps
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.npm
+            node_modules
+          key: ${{ runner.os }}-node20-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node20-
+
+      # 纯官方源，npm ci 精准安装
+      - name: Install & Build
         run: |
-          npm install
+          npm ci
           npm run build
 
-      # 安装 zip 打包工具
-      - name: 安装 zip 压缩工具
+      - name: Install zip
         run: sudo apt install -y zip
 
-      # 打包项目：压缩包内一级目录为 wp-ai-content-generator，文件名带版本号
-      - name: 打包项目为带版本号压缩包
+      - name: Pack zip with version & correct root dir
         shell: bash
         run: |
-          # 获取当前推送的版本标签 v1.0.0
           TAG=${GITHUB_REF#refs/tags/}
           ZIP_NAME="wp-ai-content-generator-${TAG}.zip"
-          # 创建临时目录，把所有文件拷贝进去，控制压缩包根目录
-          mkdir -p wp-ai-content-generator
-          cp -r ./* .env* wp-ai-content-generator/
-          # 打包并排除无用目录
-          zip -r "${ZIP_NAME}" wp-ai-content-generator \
-            -x "wp-ai-content-generator/.git/*" \
-            -x "wp-ai-content-generator/.github/*" \
-            -x "wp-ai-content-generator/node_modules/*"
 
-      # 发布到 GitHub Release 并自动生成更新日志
-      - name: 发布到 GitHub Release
+          rm -rf wp-ai-content-generator
+          mkdir wp-ai-content-generator
+
+          shopt -s dotglob
+          for file in *; do
+            [[ $file == "wp-ai-content-generator" ]] && continue
+            cp -r "$file" wp-ai-content-generator/
+          done
+
+          zip -r "${ZIP_NAME}" wp-ai-content-generator \
+            -x "*/.git/*" \
+            -x "*/.github/*" \
+            -x "*/node_modules/*"
+
+      - name: Publish Release
         uses: softprops/action-gh-release@v2
         with:
           files: wp-ai-content-generator-*.zip
