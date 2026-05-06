@@ -1,9 +1,13 @@
 name: Build & Full Repo Zip Release
 
+# 仅手动触发，支持输入版本号
 on:
-  push:
-    tags:
-      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: '输入版本号（例如 v1.0.0）'
+        required: true
+        default: 'v1.0.0'
 
 permissions:
   contents: write
@@ -22,7 +26,7 @@ jobs:
         with:
           node-version: 20
 
-      # 标准官方 npm 缓存，不换源、不瞎改配置
+      # 缓存 npm 依赖
       - name: Cache npm deps
         uses: actions/cache@v4
         with:
@@ -33,35 +37,38 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-node20-
 
-      # 纯官方源，npm ci 精准安装
+      # 安装依赖 + 构建
       - name: Install & Build
         run: |
           npm ci
           npm run build
 
+      # 安装 zip
       - name: Install zip
         run: sudo apt install -y zip
 
-      - name: Pack zip with version & correct root dir
+      # 打包，使用手动输入的版本号
+      - name: Pack zip with input version
         shell: bash
         run: |
-          TAG=${GITHUB_REF#refs/tags/}
+          TAG=${{ github.event.inputs.version }}
           ZIP_NAME="wp-ai-content-generator-${TAG}.zip"
 
           rm -rf wp-ai-content-generator
-          mkdir wp-ai-content-generator
+          mkdir -p wp-ai-content-generator
 
           shopt -s dotglob
           for file in *; do
             [[ $file == "wp-ai-content-generator" ]] && continue
+            [[ $file == ".git" ]] && continue
+            [[ $file == ".github" ]] && continue
             cp -r "$file" wp-ai-content-generator/
           done
 
           zip -r "${ZIP_NAME}" wp-ai-content-generator \
-            -x "*/.git/*" \
-            -x "*/.github/*" \
             -x "*/node_modules/*"
 
+      # 发布 Release
       - name: Publish Release
         uses: softprops/action-gh-release@v2
         with:
