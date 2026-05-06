@@ -2,7 +2,7 @@
 /**
  * Plugin Name: AI Content Generator
  * Description: 在区块编辑器中通过 OpenAI 兼容 API 生成内容，流式输出。
- * Version: 1.0.0
+ * Version: 1.0.2
  * Author: Your Name
  * Text Domain: ai-content-gen
  */
